@@ -334,7 +334,10 @@ class QuickBooks(object):
 
             code = ""
             if "code" in error:
-                code = int(error["code"])
+                try:
+                    code = int(error["code"])
+                except ValueError:
+                    code = 0
 
             if 0 < code <= 499:
                 raise exceptions.AuthorizationException(message, code, detail)
