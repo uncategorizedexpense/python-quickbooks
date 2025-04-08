@@ -1,4 +1,10 @@
-from .base import QuickbooksManagedObject, QuickbooksTransactionEntity, Ref, CustomField, MetaData
+from .base import (
+    QuickbooksManagedObject,
+    QuickbooksTransactionEntity,
+    Ref,
+    CustomField,
+    MetaData,
+)
 
 
 class CompanyCurrency(QuickbooksManagedObject, QuickbooksTransactionEntity):
@@ -35,6 +41,6 @@ class CompanyCurrency(QuickbooksManagedObject, QuickbooksTransactionEntity):
 
         ref.name = self.Name
         ref.type = self.qbo_object_name
-        ref.value = self.Id
+        ref.value = self.Code or self.Id
 
         return ref

@@ -214,7 +214,6 @@ class QuickBooks(object):
         }
 
         if file_path:
-            attachment = open(file_path, "rb")
             url = url.replace("attachable", "upload")
             boundary = "-------------PythonMultipartPost"
             headers.update(
@@ -227,7 +226,8 @@ class QuickBooks(object):
                 }
             )
 
-            binary_data = str(base64.b64encode(attachment.read()).decode("ascii"))
+            with open(file_path, "rb") as attachment:
+                binary_data = str(base64.b64encode(attachment.read()).decode("ascii"))
 
             content_type = json.loads(request_body)["ContentType"]
 
@@ -281,8 +281,12 @@ class QuickBooks(object):
                 "Error reading json response: {0}".format(req.text), 10000
             )
 
-        if "Fault" in result or "Fault" in str(result):
-            self.handle_exceptions(result["Fault"])
+        if "Fault" in result:
+            self.handle_exceptions(
+                result.get(
+                    "Fault", {"code": 0, "Message": "Unknown error", "Detail": result}
+                )
+            )
         elif not req.status_code == httplib.OK:
             raise exceptions.QuickbooksException(
                 "Error returned with status code '{0}': {1}".format(

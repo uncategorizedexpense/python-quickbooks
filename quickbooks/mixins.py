@@ -1,24 +1,47 @@
 from urllib.parse import quote
+import decimal
 
-try: import simplejson as json
-except ImportError: import json
+try:
+    import simplejson as json
+except ImportError:
+    import json
 
 from .utils import build_where_clause, build_choose_clause
 from .client import QuickBooks
 from .exceptions import QuickbooksException
 
 
+class DecimalEncoder(json.JSONEncoder):
+    def default(self, o):
+        if isinstance(o, decimal.Decimal):
+            return str(o)
+        return super(DecimalEncoder, self).default(o)
+
+
 class ToJsonMixin(object):
     def to_json(self):
-        return json.dumps(self, default=self.json_filter(), sort_keys=True, indent=4)
+        return json.dumps(
+            self,
+            cls=DecimalEncoder,
+            default=self.json_filter(),
+            sort_keys=True,
+            indent=4,
+        )
 
     def json_filter(self):
         """
         filter out properties that have names starting with _
         or properties that have a value of None
         """
-        return lambda obj: dict((k, v) for k, v in obj.__dict__.items()
-                                if not k.startswith('_') and getattr(obj, k) is not None)
+        return lambda obj: (
+            str(obj)
+            if isinstance(obj, decimal.Decimal)
+            else dict(
+                (k, v)
+                for k, v in obj.__dict__.items()
+                if not k.startswith("_") and getattr(obj, k) is not None
+            )
+        )
 
 
 class FromJsonMixin(object):
@@ -39,8 +62,8 @@ class FromJsonMixin(object):
 
                 for data in json_data[key]:
 
-                    if 'DetailType' in data and data['DetailType'] in obj.detail_dict:
-                        sub_obj = obj.detail_dict[data['DetailType']]()
+                    if "DetailType" in data and data["DetailType"] in obj.detail_dict:
+                        sub_obj = obj.detail_dict[data["DetailType"]]()
                     else:
                         sub_obj = obj.list_dict[key]()
 
@@ -61,7 +84,7 @@ def to_dict(obj, classkey=None):
     """
     if isinstance(obj, dict):
         data = {}
-        for (k, v) in obj.items():
+        for k, v in obj.items():
             data[k] = to_dict(v, classkey)
         return data
     elif hasattr(obj, "_ast"):
@@ -69,9 +92,13 @@ def to_dict(obj, classkey=None):
     elif hasattr(obj, "__iter__") and not isinstance(obj, str):
         return [to_dict(v, classkey) for v in obj]
     elif hasattr(obj, "__dict__"):
-        data = dict([(key, to_dict(value, classkey))
-                    for key, value in obj.__dict__.items()
-                    if not callable(value) and not key.startswith('_')])
+        data = dict(
+            [
+                (key, to_dict(value, classkey))
+                for key, value in obj.__dict__.items()
+                if not callable(value) and not key.startswith("_")
+            ]
+        )
 
         if classkey is not None and hasattr(obj, "__class__"):
             data[classkey] = obj.__class__.__name__
@@ -96,7 +123,7 @@ class ReadMixin(object):
 
         json_data = qb.get_single_object(cls.qbo_object_name, pk=id)
 
-        if cls.qbo_json_object_name != '':
+        if cls.qbo_json_object_name != "":
             return cls.from_json(json_data[cls.qbo_json_object_name])
         else:
             return cls.from_json(json_data[cls.qbo_object_name])
@@ -110,10 +137,10 @@ class SendMixin(object):
         end_point = "{0}/{1}/send".format(self.qbo_object_name.lower(), self.Id)
 
         if send_to:
-            send_to = quote(send_to, safe='')
+            send_to = quote(send_to, safe="")
             end_point = "{0}?sendTo={1}".format(end_point, send_to)
 
-        results = qb.misc_operation(end_point, None, 'application/octet-stream')
+        results = qb.misc_operation(end_point, None, "application/octet-stream")
 
         return results
 
@@ -122,18 +149,9 @@ class VoidMixin(object):
 
     def get_void_params(self):
         qb_object_params_map = {
-            "Payment": {
-                "operation": "update",
-                "include": "void"
-            },
-            "SalesReceipt": {
-                "operation": "update",
-                "include": "void"
-            },
-            "BillPayment": {
-                "operation": "update",
-                "include": "void"
-            },
+            "Payment": {"operation": "update", "include": "void"},
+            "SalesReceipt": {"operation": "update", "include": "void"},
+            "BillPayment": {"operation": "update", "include": "void"},
             "Invoice": {
                 "operation": "void",
             },
@@ -143,21 +161,13 @@ class VoidMixin(object):
 
     def get_void_data(self):
         qb_object_params_map = {
-            "Payment": {
-                "Id": self.Id,
-                "SyncToken": self.SyncToken,
-                "sparse": True
-            },
+            "Payment": {"Id": self.Id, "SyncToken": self.SyncToken, "sparse": True},
             "SalesReceipt": {
                 "Id": self.Id,
                 "SyncToken": self.SyncToken,
-                "sparse": True
+                "sparse": True,
             },
-            "BillPayment": {
-                "Id": self.Id,
-                "SyncToken": self.SyncToken,
-                "sparse": True
-            },
+            "BillPayment": {"Id": self.Id, "SyncToken": self.SyncToken, "sparse": True},
             "Invoice": {
                 "Id": self.Id,
                 "SyncToken": self.SyncToken,
@@ -171,7 +181,7 @@ class VoidMixin(object):
             qb = QuickBooks()
 
         if not self.Id:
-            raise QuickbooksException('Cannot void unsaved object')
+            raise QuickbooksException("Cannot void unsaved object")
 
         endpoint = self.qbo_object_name.lower()
         url = "{0}/company/{1}/{2}".format(qb.api_url, qb.company_id, endpoint)
@@ -192,11 +202,21 @@ class UpdateMixin(object):
             qb = QuickBooks()
 
         if self.Id and int(self.Id) > 0:
-            json_data = qb.update_object(self.qbo_object_name, self.to_json(), request_id=request_id, params=params)
+            json_data = qb.update_object(
+                self.qbo_object_name,
+                self.to_json(),
+                request_id=request_id,
+                params=params,
+            )
         else:
-            json_data = qb.create_object(self.qbo_object_name, self.to_json(), request_id=request_id, params=params)
+            json_data = qb.create_object(
+                self.qbo_object_name,
+                self.to_json(),
+                request_id=request_id,
+                params=params,
+            )
 
-        if self.qbo_json_object_name != '':
+        if self.qbo_json_object_name != "":
             obj = type(self).from_json(json_data[self.qbo_json_object_name])
         else:
             obj = type(self).from_json(json_data[self.qbo_object_name])
@@ -213,7 +233,9 @@ class UpdateNoIdMixin(object):
         if not qb:
             qb = QuickBooks()
 
-        json_data = qb.update_object(self.qbo_object_name, self.to_json(), request_id=request_id)
+        json_data = qb.update_object(
+            self.qbo_object_name, self.to_json(), request_id=request_id
+        )
         obj = type(self).from_json(json_data[self.qbo_object_name])
         return obj
 
@@ -226,13 +248,15 @@ class DeleteMixin(object):
             qb = QuickBooks()
 
         if not self.Id:
-            raise QuickbooksException('Cannot delete unsaved object')
+            raise QuickbooksException("Cannot delete unsaved object")
 
         data = {
-            'Id': self.Id,
-            'SyncToken': self.SyncToken,
+            "Id": self.Id,
+            "SyncToken": self.SyncToken,
         }
-        return qb.delete_object(self.qbo_object_name, json.dumps(data), request_id=request_id)
+        return qb.delete_object(
+            self.qbo_object_name, json.dumps(data), request_id=request_id
+        )
 
 
 class DeleteNoIdMixin(object):
@@ -242,7 +266,9 @@ class DeleteNoIdMixin(object):
         if not qb:
             qb = QuickBooks()
 
-        return qb.delete_object(self.qbo_object_name, self.to_json(), request_id=request_id)
+        return qb.delete_object(
+            self.qbo_object_name, self.to_json(), request_id=request_id
+        )
 
 
 class ListMixin(object):
@@ -257,8 +283,13 @@ class ListMixin(object):
         :param qb:
         :return: Returns list
         """
-        return cls.where("", order_by=order_by, start_position=start_position,
-                         max_results=max_results, qb=qb)
+        return cls.where(
+            "",
+            order_by=order_by,
+            start_position=start_position,
+            max_results=max_results,
+            qb=qb,
+        )
 
     @classmethod
     def filter(cls, order_by="", start_position="", max_results="", qb=None, **kwargs):
@@ -270,9 +301,13 @@ class ListMixin(object):
         :param kwargs: field names and values to filter the query
         :return: Filtered list
         """
-        return cls.where(build_where_clause(**kwargs),
-                         start_position=start_position, max_results=max_results, order_by=order_by,
-                         qb=qb)
+        return cls.where(
+            build_where_clause(**kwargs),
+            start_position=start_position,
+            max_results=max_results,
+            order_by=order_by,
+            qb=qb,
+        )
 
     @classmethod
     def choose(cls, choices, field="Id", qb=None):
@@ -285,7 +320,9 @@ class ListMixin(object):
         return cls.where(build_choose_clause(choices, field), qb=qb)
 
     @classmethod
-    def where(cls, where_clause="", order_by="", start_position="", max_results="", qb=None):
+    def where(
+        cls, where_clause="", order_by="", start_position="", max_results="", qb=None
+    ):
         """
         :param where_clause: QBO SQL where clause (DO NOT include 'WHERE')
         :param order_by:
@@ -307,7 +344,8 @@ class ListMixin(object):
             max_results = " MAXRESULTS " + str(max_results)
 
         select = "SELECT * FROM {0} {1}{2}{3}{4}".format(
-            cls.qbo_object_name, where_clause, order_by, start_position, max_results)
+            cls.qbo_object_name, where_clause, order_by, start_position, max_results
+        )
 
         return cls.query(select, qb=qb)
 
@@ -325,7 +363,7 @@ class ListMixin(object):
 
         obj_list = []
 
-        if cls.qbo_json_object_name != '':
+        if cls.qbo_json_object_name != "":
             object_name = cls.qbo_json_object_name
         else:
             object_name = cls.qbo_object_name
@@ -350,7 +388,8 @@ class ListMixin(object):
             where_clause = "WHERE " + where_clause
 
         select = "SELECT COUNT(*) FROM {0} {1}".format(
-            cls.qbo_object_name, where_clause)
+            cls.qbo_object_name, where_clause
+        )
 
         json_data = qb.query(select)
 
@@ -369,7 +408,9 @@ class QuickbooksPdfDownloadable(object):
         else:
             raise QuickbooksException(
                 "Cannot download {0} when no Id is assigned or if no quickbooks client is passed in".format(
-                    self.qbo_object_name))
+                    self.qbo_object_name
+                )
+            )
 
 
 class ObjectListMixin(object):

@@ -1,5 +1,12 @@
-from .base import Address, PhoneNumber, EmailAddress, WebAddress, Ref, QuickbooksManagedObject, \
-    QuickbooksTransactionEntity
+from .base import (
+    Address,
+    PhoneNumber,
+    EmailAddress,
+    WebAddress,
+    Ref,
+    QuickbooksManagedObject,
+    QuickbooksTransactionEntity,
+)
 
 
 class Customer(QuickbooksManagedObject, QuickbooksTransactionEntity):
@@ -71,6 +78,7 @@ class Customer(QuickbooksManagedObject, QuickbooksTransactionEntity):
         self.PaymentMethodRef = None
         self.ParentRef = None
         self.ARAccountRef = None
+        self.CurrencyRef = None
 
     def __str__(self):
         return self.DisplayName
